@@ -10,6 +10,7 @@ use crate::flatpak::parse::find_manifest_and_parse;
 
 mod constants;
 mod flatpak;
+mod manifest;
 mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -55,7 +56,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn handle_build_command(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     let root_dir = args.get_one::<String>("root-dir").map(PathBuf::from);
     let schema = find_manifest_and_parse(root_dir)?;
+
     debug_println!("build command, schema: {:#?}", schema);
+
+    schema.init_build()?;
 
     Ok(())
 }

@@ -3,11 +3,12 @@ use std::fs::read_to_string;
 use std::path::PathBuf;
 
 use crate::flatpak::types::ManifestSchema;
+use crate::manifest::Manifest;
 use crate::{box_error, full_println};
 
 pub fn find_manifest_and_parse(
     root_directory: Option<PathBuf>,
-) -> Result<ManifestSchema, Box<dyn Error>> {
+) -> Result<Manifest, Box<dyn Error>> {
     let mut work_directory = root_directory.unwrap_or(
         std::env::current_dir()
             .unwrap()
@@ -58,5 +59,5 @@ pub fn find_manifest_and_parse(
 
     let schema: ManifestSchema = serde_json::from_str(manifest_data.as_str())?;
 
-    Ok(schema)
+    Ok(Manifest::new(work_directory, schema))
 }
