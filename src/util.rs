@@ -10,7 +10,7 @@ macro_rules! box_error {
 #[macro_export]
 macro_rules! debug_println {
     ($($arg:tt)*) => {
-        match std::env::var(APP_LOG_VAR) {
+        match std::env::var("FBH_LOG") {
             std::result::Result::Ok(v) => match v.as_str() {
                 "1" | "2" | "full" => println!($($arg)*),
                 _ => {},
@@ -23,7 +23,7 @@ macro_rules! debug_println {
 #[macro_export]
 macro_rules! full_println {
     ($($arg:tt)*) => {
-        match std::env::var(APP_LOG_VAR) {
+        match std::env::var("FBH_LOG") {
             std::result::Result::Ok(v) => match v.as_str() {
                 "2" | "full" => println!($($arg)*) ,
                 _ => {},

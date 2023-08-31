@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use racros::{AutoDebug, AutoStr};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(AutoDebug, Deserialize, Serialize)]
 pub struct BuildOption {
@@ -20,34 +21,49 @@ pub struct BuildOption {
     pub prepend_pkg_config_path: Option<String>,
     pub env: HashMap<String, String>,
     #[serde(rename = "config-opts")]
-    pub config_opts: Vec<String>,
+    pub config_opts: Option<Vec<String>>,
 }
 
 #[derive(AutoDebug, AutoStr, Deserialize, Serialize)]
 #[autorule = "lowercase"]
 pub enum BuildSystem {
+    #[serde(rename = "meson")]
     Meson,
+    #[serde(rename = "cmake")]
     Cmake,
     #[str("cmake-ninja")]
     #[serde(rename = "cmake-ninja")]
     CmakeNinja,
+    #[serde(rename = "simple")]
     Simple,
+    #[serde(rename = "auto-tools")]
     Autotools,
+    #[serde(rename = "qmake")]
     Qmake,
 }
 
 #[derive(AutoDebug, AutoStr, Deserialize, Serialize)]
 #[autorule = "lowercase"]
 pub enum SourceType {
+    #[serde(rename = "archive")]
     Archive,
+    #[serde(rename = "git")]
     Git,
+    #[serde(rename = "bzr")]
     Bzr,
+    #[serde(rename = "svn")]
     Svn,
+    #[serde(rename = "dir")]
     Dir,
+    #[serde(rename = "file")]
     File,
+    #[serde(rename = "script")]
     Script,
+    #[serde(rename = "inline")]
     Inline,
+    #[serde(rename = "shell")]
     Shell,
+    #[serde(rename = "patch")]
     Patch,
     #[str("extra-data")]
     #[serde(rename = "extra-data")]
@@ -74,9 +90,9 @@ pub struct Module {
     pub config_opts: Option<Vec<String>>,
     pub sources: Vec<Source>,
     #[serde(rename = "build-commands")]
-    pub build_commands: Vec<String>,
+    pub build_commands: Option<Vec<String>>,
     #[serde(rename = "build-options")]
-    pub build_options: Option<Vec<BuildOption>>,
+    pub build_options: Option<BuildOption>,
     #[serde(rename = "post-install")]
     pub post_install: Option<Vec<String>>,
 }
@@ -86,7 +102,7 @@ pub struct ManifestSchema {
     pub id: Option<String>,
     pub branch: Option<String>,
     #[serde(rename = "app-id")]
-    pub app_id: String,
+    pub app_id: Option<String>,
     pub modules: Vec<Module>,
     pub sdk: String,
     pub runtime: String,
@@ -98,7 +114,7 @@ pub struct ManifestSchema {
     #[serde(rename = "finish-args")]
     pub finish_args: Vec<String>,
     #[serde(rename = "build-options")]
-    pub build_options: Option<Vec<BuildOption>>,
+    pub build_options: Option<BuildOption>,
     #[serde(rename = "x-run-args")]
     pub x_run_args: Option<Vec<String>>,
 }
@@ -106,6 +122,8 @@ pub struct ManifestSchema {
 #[derive(AutoStr, Deserialize, Serialize)]
 #[autorule = "lowercase"]
 pub enum SdkExtension {
+    #[serde(rename = "vala")]
     Vala,
+    #[serde(rename = "rust")]
     Rust,
 }
