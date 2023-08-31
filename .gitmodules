@@ -1,0 +1,3 @@
+[submodule "racros"]
+	path = racros
+	url = https://github.com/realth000/racros.git
