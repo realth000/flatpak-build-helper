@@ -59,7 +59,16 @@ fn handle_build_command(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
 
     debug_println!("build command, schema: {:#?}", schema);
 
-    schema.init_build()?;
+    if !schema.is_initialized() {
+        schema.init_build()?;
+    } else {
+        debug_println!("already initialized");
+    }
+
+    schema.update_dependencies()?;
+
+    schema.build_dependencies()?;
+    schema.build(true)?;
 
     Ok(())
 }

@@ -57,9 +57,9 @@ pub fn find_manifest_and_parse(
         .unwrap()
         .path();
 
-    let manifest_data = read_to_string(manifest_path)?;
+    let manifest_data = read_to_string(manifest_path.clone())?;
 
     let schema: ManifestSchema = serde_json::from_str(manifest_data.as_str())?;
 
-    Ok(Manifest::new(work_directory, schema))
+    Ok(Manifest::new(work_directory, schema, manifest_path))
 }

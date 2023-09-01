@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter, Write};
 
 use racros::{AutoDebug, AutoStr};
 use serde::{Deserialize, Serialize};
 
-#[derive(AutoDebug, Deserialize, Serialize)]
+#[derive(AutoDebug, Default, Deserialize, Serialize)]
 pub struct BuildOption {
     #[serde(rename = "build-args")]
     pub build_args: Vec<String>,
@@ -95,6 +96,12 @@ pub struct Module {
     pub build_options: Option<BuildOption>,
     #[serde(rename = "post-install")]
     pub post_install: Option<Vec<String>>,
+}
+
+impl Display for Module {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name.as_str())
+    }
 }
 
 #[derive(AutoDebug, Deserialize, Serialize)]
