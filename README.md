@@ -6,12 +6,15 @@ Now aims to working together with [gtk-rs-template](https://gitlab.gnome.org/Wor
 
 And more.
 
+Translated from [flatpak-vscode](https://github.com/bilelmoussaoui/flatpak-vscode).
+
 ## State
 
 Work in progress.
 
 * [x] `build-init`
-* [ ] `build`
+* [x] `build`
+* [ ] `bunle`
 * [ ] `clean`
 * [ ] `run`
 * [ ] Support pure flatpak projects
