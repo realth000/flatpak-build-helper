@@ -9,7 +9,7 @@ use crate::{box_error, full_println};
 pub fn find_manifest_and_parse(
     root_directory: Option<PathBuf>,
 ) -> Result<Manifest, Box<dyn Error>> {
-    let mut work_directory = root_directory.unwrap_or(
+    let work_directory = root_directory.unwrap_or(
         std::env::current_dir()
             .unwrap()
             .to_str()
@@ -18,23 +18,25 @@ pub fn find_manifest_and_parse(
             .parse::<PathBuf>()?,
     );
 
-    work_directory.push("build-aux");
+    let mut check_directory = work_directory.clone();
 
-    if !work_directory.exists() {
+    check_directory.push("build-aux");
+
+    if !check_directory.exists() {
         return box_error!(
             "directory build-aux not found in {}",
-            work_directory.to_str().unwrap()
+            check_directory.to_str().unwrap()
         );
     }
 
-    if !work_directory.is_dir() {
+    if !check_directory.is_dir() {
         return box_error!(
             "not a directory: {}/build-aux",
-            work_directory.to_str().unwrap()
+            check_directory.to_str().unwrap()
         );
     }
 
-    let manifest_path = work_directory
+    let manifest_path = check_directory
         .read_dir()
         .unwrap()
         .find(|x| {
@@ -50,7 +52,7 @@ pub fn find_manifest_and_parse(
         })
         .ok_or(format!(
             "*.Devel.json not found in {}",
-            work_directory.to_str().unwrap(),
+            check_directory.to_str().unwrap(),
         ))?
         .unwrap()
         .path();
