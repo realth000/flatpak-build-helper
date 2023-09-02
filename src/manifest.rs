@@ -1,14 +1,38 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::from_utf8;
 
+use libc::getuid;
 use racros::AutoDebug;
+use regex::Regex;
 
-use crate::constants::BUILD_SYSTEM_BUILD_DIR;
+use crate::constants::{
+    BUILD_SYSTEM_BUILD_DIR, FONT_DIR_CONTENT_HEADER, SYSTEM_FONTS_DIR, SYSTEM_FONT_CACHE_DIRS,
+    SYSTEM_LOCAL_FONT_DIR,
+};
 use crate::flatpak::types::{BuildOption, BuildSystem, ManifestSchema, Module};
+use crate::util::{
+    get_host_envs, get_user_cache_dir, get_user_fonts_cache_dir, get_user_fonts_dir,
+};
 use crate::{box_error, debug_println, full_println};
+
+static ENV_NAME_LIT: [&str; 11] = [
+    "COLORTERM",
+    "DESKTOP_SESSION",
+    "LANG",
+    "WAYLAND_DISPLAY",
+    "XDG_CURRENT_DESKTOP",
+    "XDG_SEAT",
+    "XDG_SESSION_DESKTOP",
+    "XDG_SESSION_ID",
+    "XDG_SESSION_TYPE",
+    "XDG_VTNR",
+    "AT_SPI_BUS_ADDRESS",
+];
 
 /// Combine environment variables from manifest schema, host env, and default values.
 ///
@@ -74,6 +98,9 @@ pub struct Manifest {
     pub build_dir: PathBuf,
     pub state_dir: PathBuf,
     pub id: String,
+
+    fonts_args: Vec<String>,
+    a11y_bus_args: Vec<String>,
 }
 
 impl Manifest {
@@ -94,6 +121,8 @@ impl Manifest {
             build_dir,
             state_dir,
             id,
+            fonts_args: vec![],
+            a11y_bus_args: vec![],
         }
     }
 
@@ -534,5 +563,208 @@ impl Manifest {
         );
 
         envs
+    }
+}
+
+/// Implement run
+impl Manifest {
+    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+        let uid = Manifest::get_uid();
+        let app_id = self.id.as_str();
+        if self.fonts_args.is_empty() {
+            self.fonts_args = self.get_fonts_args()?;
+        }
+
+        if self.a11y_bus_args.is_empty() {
+            self.a11y_bus_args = self.get_a11y_bus_args()?;
+        }
+
+        let mut args: Vec<String> = vec![
+            "build".to_string(),
+            "--with-appdir".to_string(),
+            "--allow=devel".to_string(),
+            format!(
+                "--bind-mount=/run/user/{}/doc=/run/user/{}/doc/by-app/{}",
+                uid, uid, app_id
+            ),
+        ];
+
+        args.extend(self.get_finish_args());
+        args.extend([
+            "--talk-name=org.freedesktop.portal.*".to_string(),
+            "--talk-name=org.a11y.Bus".to_string(),
+        ]);
+
+        args.extend(self.a11y_bus_args.to_owned());
+
+        args.extend(
+            get_host_envs(ENV_NAME_LIT)
+                .iter()
+                .map(|(key, value)| format!("--env={}={}", key, value))
+                .collect::<Vec<String>>(),
+        );
+
+        // TODO: Check mountExtensions?
+        args.push("--share=network".to_string());
+
+        args.extend(self.fonts_args.to_owned());
+        args.push(self.repo_dir.to_str().unwrap().to_string());
+
+        // TODO: Customize shellCommand
+        args.push(self.manifest.command.to_string());
+
+        let mut command = Command::new("flatpak");
+        command.args(args);
+
+        debug_println!("start running");
+        full_println!("{:#?}", command);
+
+        let output = command.output()?;
+
+        if !output.status.success() {
+            println!("{}", String::from_utf8(output.stderr).unwrap());
+            return box_error!("error running command");
+        }
+
+        println!("{}", String::from_utf8(output.stdout).unwrap());
+
+        Ok(())
+    }
+
+    fn get_finish_args(&self) -> Vec<String> {
+        // Ugly, do not have a &&str, so use any() instead of contains()
+        self.manifest
+            .finish_args
+            .iter()
+            .filter(|x| {
+                !["--metadata", "--require-version"]
+                    .iter()
+                    .any(|xx| *xx == x.split_once('=').unwrap_or(("", "")).0)
+            })
+            .map(|x| x.to_string())
+            .collect()
+    }
+
+    fn get_uid() -> u32 {
+        unsafe { getuid() }
+    }
+
+    fn get_fonts_args(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        let mut fonts_args = vec![];
+        let mapped_font_file = get_user_cache_dir().join("font-dirs.xml");
+        let mut font_dir_content = String::from(FONT_DIR_CONTENT_HEADER);
+
+        // TODO: Handle sandbox?
+
+        if PathBuf::from(SYSTEM_FONTS_DIR).exists() {
+            fonts_args.push(format!("--bind-mount=/run/host/fonts={}", SYSTEM_FONTS_DIR));
+            font_dir_content.push_str(
+                format!(
+                    "\t<remap-dir as-path={}>/run/host/fonts/</remap-dir>\n",
+                    SYSTEM_FONTS_DIR,
+                )
+                .as_str(),
+            );
+        }
+
+        if PathBuf::from(SYSTEM_LOCAL_FONT_DIR).exists() {
+            fonts_args.push(format!(
+                "--bind-mount=/run/host/local-fonts={}",
+                SYSTEM_LOCAL_FONT_DIR
+            ));
+            font_dir_content.push_str(
+                format!(
+                    "\t<remap-dir as-path={}>/run/host/fonts/</remap-dir>\n",
+                    SYSTEM_LOCAL_FONT_DIR,
+                )
+                .as_str(),
+            )
+        }
+
+        SYSTEM_FONT_CACHE_DIRS
+            .iter()
+            .filter(|x| PathBuf::from(x).exists())
+            .for_each(|x| fonts_args.push(format!("--bind-mount=/run/host/local-fonts={}", x)));
+
+        get_user_fonts_dir()
+            .iter()
+            .filter(|x| PathBuf::from(x).exists())
+            .map(|x| x.to_str().unwrap())
+            .for_each(|x| {
+                fonts_args.push(format!("--filesystem={};ro", x));
+                font_dir_content.push_str(
+                    format!("\t<remap-dir as-path={}>/run/host/fonts/</remap-dir>\n", x).as_str(),
+                );
+            });
+
+        let user_fonts_cache_dir = get_user_fonts_cache_dir();
+        if user_fonts_cache_dir.exists() {
+            fonts_args.push(format!(
+                "--filesystem={};ro",
+                user_fonts_cache_dir.to_str().unwrap()
+            ));
+            fonts_args.push(format!(
+                "--bind-mount=/run/host/user-fonts-cache={}",
+                user_fonts_cache_dir.to_str().unwrap()
+            ));
+        }
+
+        font_dir_content.push_str("</fontconfig>\n");
+        fonts_args.push(format!(
+            "--bind-mount=/run/host/font-dirs.xml={}",
+            mapped_font_file.to_str().unwrap()
+        ));
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(mapped_font_file)?;
+
+        file.write_all(&font_dir_content.into_bytes())?;
+
+        Ok(fonts_args)
+    }
+
+    fn get_a11y_bus_args(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        let mut bus_args = vec![];
+        // Get from gdbus
+        let gdbus_output = Command::new("gdbus")
+            .arg("call")
+            .arg("--session")
+            .arg("--dest=org.a11y.Bus")
+            .arg("--object-path=/org/a11y/bus")
+            .arg("--method=org.a11y.Bus.GetAddress")
+            .output()?;
+        if !gdbus_output.status.success() {
+            println!("{}", String::from_utf8(gdbus_output.stderr).unwrap());
+            return box_error!("failed to get a11y dbus args when running gdbus command");
+        }
+
+        // TODO: Trim each line?
+        // ('unix:path=/run/user/1000/at-spi/bus_0,guid=xxx123xxx',)
+        let dbus_output = String::from_utf8(gdbus_output.stdout)
+            .unwrap()
+            .replace("',(", "")
+            .replace("',)", "");
+
+        // TODO: Handle situation without suffix part.
+        let re = Regex::new(r"^.*unix:path=(?<unix_path>[^,]+),(?<suffix>[0-9a-z=]+).*\n$")?;
+        match re.captures(dbus_output.as_str()) {
+            Some(v) => {
+                let unix_path = v.name("unix_path").unwrap().as_str().to_string();
+                let suffix = v.name("suffix").unwrap().as_str().to_string();
+                bus_args.push(format!(
+                    "--bind-mount=/run/flatpak/at-spi-bus={}",
+                    unix_path
+                ));
+                bus_args.push(format!(
+                    "--env=AT_SPI_BUS_ADDRESS=unix:path=/run/flatpak/at-spi-bus{}",
+                    suffix
+                ));
+            }
+            None => return box_error!("failed to parse a11y gdbus address: {}", dbus_output),
+        }
+
+        Ok(bus_args)
     }
 }

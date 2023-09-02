@@ -7,7 +7,10 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.4.1", features = ["derive"] }
+dirs = "5.0.1"
+libc = "0.2.147"
 num_cpus = "1.16.0"
 racros = { path = "./racros" }
+regex = "1.9.5"
 serde = { version = "1.0.188", features = ["serde_derive"] }
 serde_json = "1.0.105"

@@ -67,6 +67,8 @@ fn handle_build_command(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
         debug_println!("skip build-init: already initialized");
     }
 
+    // TODO: Check already build
+
     debug_println!("updating dependencies");
     schema.update_dependencies()?;
 
@@ -81,6 +83,7 @@ fn handle_build_command(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
 }
 
 fn handle_run_command(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
-    debug_println!("run command");
-    Ok(())
+    let root_dir = args.get_one::<String>("root-dir").map(PathBuf::from);
+    let mut schema = find_manifest_and_parse(root_dir)?;
+    schema.run()
 }
