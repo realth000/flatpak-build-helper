@@ -6,15 +6,28 @@ Now aims to working together with [gtk-rs-template](https://gitlab.gnome.org/Wor
 
 And more.
 
-Translated from [flatpak-vscode](https://github.com/bilelmoussaoui/flatpak-vscode).
+Translated from [flatpak-vscode](https://github.com/bilelmoussaoui/flatpak-vscode), typescript VS Code extension to rust cli.
 
 ## State
 
 Work in progress.
 
+### Commands
+
 * [x] `build-init`
 * [x] `build`
-* [ ] `bunle`
+* [ ] `bundle`
 * [ ] `clean`
-* [ ] `run`
-* [ ] Support pure flatpak projects
+* [x] `run`
+
+### Build System
+
+* [ ] `Autotools`
+* [ ] `CMake`
+* [ ] `CMake + Ninja`
+* [x] `Meson`
+
+### Projects
+* [ ] [gtk-rust-template](https://gitlab.gnome.org/World/Rust/gtk-rust-template)
+* [ ] Pure flatpak project
+
