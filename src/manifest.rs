@@ -10,6 +10,61 @@ use crate::constants::BUILD_SYSTEM_BUILD_DIR;
 use crate::flatpak::types::{BuildOption, BuildSystem, ManifestSchema, Module};
 use crate::{box_error, debug_println, full_println};
 
+/// Combine environment variables from manifest schema, host env, and default values.
+///
+/// e.g. For `PATH` env, add the following env string to `ret` arg:
+/// "--env=PATH=${prepend env from schema}:${host env}:${default env value}:${append env from schema}"
+macro_rules! override_env {
+    ($ret: tt, $manifest: tt, $env_name: tt, $default_value: ident, $prepend_ident: ident, $append_ident: ident) => {
+        let module = $manifest.module().unwrap();
+        let prepend_env_list = vec![
+            $manifest
+                .manifest
+                .build_options
+                .as_ref()
+                .unwrap_or(&BuildOption::default())
+                .$prepend_ident
+                .clone()
+                .unwrap_or_default(),
+            module
+                .build_options
+                .as_ref()
+                .unwrap_or(&BuildOption::default())
+                .$prepend_ident
+                .clone()
+                .unwrap_or_default(),
+        ];
+
+        let append_env_list = vec![
+            $manifest
+                .manifest
+                .build_options
+                .as_ref()
+                .unwrap_or(&BuildOption::default())
+                .$append_ident
+                .clone()
+                .unwrap_or_default(),
+            module
+                .build_options
+                .as_ref()
+                .unwrap_or(&BuildOption::default())
+                .$append_ident
+                .clone()
+                .unwrap_or_default(),
+        ];
+
+        let host_env = std::env::var($env_name).unwrap_or_default();
+
+        let mut all = vec![];
+        all.extend(prepend_env_list);
+        all.push(host_env);
+        all.extend($default_value);
+        all.extend(append_env_list);
+        all.retain(|x| !&x.is_empty());
+        $ret.push(format!("--env={}={}", $env_name, all.join(":")));
+    };
+}
+
 #[derive(AutoDebug)]
 pub struct Manifest {
     pub root_dir: PathBuf,
@@ -56,6 +111,7 @@ impl Manifest {
         full_println!("initialize command: {:#?}", cmd);
 
         let cmd_output = cmd.output()?;
+        print!("{}", from_utf8(cmd_output.stdout.as_ref()).unwrap());
 
         if !cmd_output.status.success() {
             eprintln!(
@@ -108,6 +164,8 @@ impl Manifest {
 
         let cmd_output = cmd.output()?;
 
+        print!("{}", from_utf8(cmd_output.stdout.as_ref()).unwrap());
+
         if !cmd_output.status.success() {
             eprintln!(
                 "failed to update dependencies {}",
@@ -131,7 +189,8 @@ impl Manifest {
         cmd.arg("--ccache")
             .arg("--force-clean")
             .arg("--disable-updates")
-            .arg("--download-only")
+            .arg("--disable-download")
+            .arg("--build-only")
             .arg("--keep-build-dirs")
             .arg(format!("--state-dir={}", self.state_dir.to_str().unwrap()).as_str())
             .arg(format!(
@@ -144,6 +203,8 @@ impl Manifest {
         let cmd_output = cmd.output()?;
 
         full_println!("build dependencies command: {:#?}", cmd);
+
+        print!("{}", from_utf8(cmd_output.stdout.as_ref()).unwrap());
 
         if !cmd_output.status.success() {
             eprintln!(
@@ -199,11 +260,20 @@ impl Manifest {
         build_envs.extend(manifest_envs);
         build_envs.extend(module_envs);
 
-        let build_args = vec![
+        let mut build_args = vec![
             "--share=network".to_string(),
+            "--nofilesystem=host".to_string(), // Need this?
             format!("--filesystem={}", self.root_dir.to_str().unwrap()),
             format!("--filesystem={}", self.repo_dir.to_str().unwrap()),
         ];
+        build_args.extend(build_envs);
+
+        build_args.extend(self.get_envs());
+
+        // Need these?
+        // build_args.push(host_var_path);
+        // build_args.push("--env=LD_LIBRARY_PATH=/app/lib/".to_string());
+        // build_args.push("--env=PKG_CONFIG_PATH=/app/lib/pkgconfig:/app/share/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig".to_string());
 
         let mut config_opts: Vec<String> = vec![];
         config_opts.extend(
@@ -432,5 +502,37 @@ impl Manifest {
                 command
             })
             .collect()
+    }
+
+    fn get_envs(&self) -> Vec<String> {
+        let mut envs = vec![];
+
+        let default_path = vec!["/app/bin".to_string(), "/usr/bin".to_string()];
+        override_env!(envs, self, "PATH", default_path, prepend_path, append_path);
+        let default_ld_library_path = vec!["/app/lib".to_string()];
+        override_env!(
+            envs,
+            self,
+            "LD_LIBRARY_PATH",
+            default_ld_library_path,
+            prepend_ld_library_path,
+            append_ld_library_path
+        );
+        let default_pkg_config_path = vec![
+            "/app/lib/pkgconfig".to_string(),
+            "/app/share/pkgconfig".to_string(),
+            "/usr/lib/pkgconfig".to_string(),
+            "/usr/share/pkgconfig".to_string(),
+        ];
+        override_env!(
+            envs,
+            self,
+            "PKG_CONFIG_PATH",
+            default_pkg_config_path,
+            prepend_pkg_config_path,
+            append_pkg_config_path
+        );
+
+        envs
     }
 }

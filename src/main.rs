@@ -74,7 +74,8 @@ fn handle_build_command(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     schema.build_dependencies()?;
 
     debug_println!("building targets");
-    schema.build(true)?;
+    // TODO: Handle rebuild
+    schema.build(false)?;
 
     Ok(())
 }
