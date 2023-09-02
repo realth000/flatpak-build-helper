@@ -57,17 +57,23 @@ fn handle_build_command(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     let root_dir = args.get_one::<String>("root-dir").map(PathBuf::from);
     let schema = find_manifest_and_parse(root_dir)?;
 
-    debug_println!("build command, schema: {:#?}", schema);
+    full_println!("build command, schema: {:#?}", schema);
 
+    debug_println!("check initialization");
     if !schema.is_initialized() {
+        debug_println!("running build-init");
         schema.init_build()?;
     } else {
-        debug_println!("already initialized");
+        debug_println!("skip build-init: already initialized");
     }
 
+    debug_println!("updating dependencies");
     schema.update_dependencies()?;
 
+    debug_println!("building dependencies");
     schema.build_dependencies()?;
+
+    debug_println!("building targets");
     schema.build(true)?;
 
     Ok(())

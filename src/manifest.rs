@@ -8,7 +8,7 @@ use racros::AutoDebug;
 
 use crate::constants::BUILD_SYSTEM_BUILD_DIR;
 use crate::flatpak::types::{BuildOption, BuildSystem, ManifestSchema, Module};
-use crate::{box_error, debug_println};
+use crate::{box_error, debug_println, full_println};
 
 #[derive(AutoDebug)]
 pub struct Manifest {
@@ -44,19 +44,23 @@ impl Manifest {
 
     pub fn init_build(&self) -> Result<(), Box<dyn Error>> {
         // flatpak build-init $RepoDir $Id $Sdk $Runtime $runtimeVersion
-        let cmd = Command::new("flatpak")
-            .arg("build-init")
+        let mut cmd = Command::new("flatpak");
+
+        cmd.arg("build-init")
             .arg(self.repo_dir.to_str().unwrap())
             .arg(&self.id)
             .arg(&self.manifest.sdk)
             .arg(&self.manifest.runtime)
-            .arg(&self.manifest.runtime_version)
-            .output()?;
+            .arg(&self.manifest.runtime_version);
 
-        if !cmd.status.success() {
+        full_println!("initialize command: {:#?}", cmd);
+
+        let cmd_output = cmd.output()?;
+
+        if !cmd_output.status.success() {
             eprintln!(
                 "failed to build-init {}",
-                from_utf8(cmd.stderr.as_ref()).unwrap()
+                from_utf8(cmd_output.stderr.as_ref()).unwrap()
             );
         }
 
@@ -65,18 +69,30 @@ impl Manifest {
 
     pub fn is_initialized(&self) -> bool {
         if !self.root_dir.exists() {
+            full_println!(
+                "initialize check not passed: root_dir not exists: {}",
+                self.root_dir.to_str().unwrap()
+            );
             return false;
         }
 
         let metadata_file = self.repo_dir.clone().join("metadata");
         let files_dir = self.repo_dir.clone().join("files");
         let var_dir = self.repo_dir.clone().join("var");
+
+        full_println!(
+            "metadata: {}, files: {}, var: {}",
+            metadata_file.is_file(),
+            files_dir.is_dir(),
+            var_dir.is_dir()
+        );
+
         metadata_file.is_file() && files_dir.is_dir() && var_dir.is_dir()
     }
 
     pub fn update_dependencies(&self) -> Result<(), Box<dyn Error>> {
-        let cmd = Command::new("flatpak-builder")
-            .arg("--ccache")
+        let mut cmd = Command::new("flatpak-builder");
+        cmd.arg("--ccache")
             .arg("--force-clean")
             .arg("--disable-updates")
             .arg("--download-only")
@@ -86,13 +102,16 @@ impl Manifest {
                 self.module().expect("no module found in manifest")
             ))
             .arg(self.repo_dir.to_str().unwrap())
-            .arg(self.path())
-            .output()?;
+            .arg(self.path());
 
-        if !cmd.status.success() {
+        full_println!("update dependencies command: {:#?}", cmd);
+
+        let cmd_output = cmd.output()?;
+
+        if !cmd_output.status.success() {
             eprintln!(
                 "failed to update dependencies {}",
-                from_utf8(cmd.stderr.as_ref()).unwrap()
+                from_utf8(cmd_output.stderr.as_ref()).unwrap()
             );
         }
 
@@ -108,8 +127,8 @@ impl Manifest {
     }
 
     pub fn build_dependencies(&self) -> Result<(), Box<dyn Error>> {
-        let cmd = Command::new("flatpak-builder")
-            .arg("--ccache")
+        let mut cmd = Command::new("flatpak-builder");
+        cmd.arg("--ccache")
             .arg("--force-clean")
             .arg("--disable-updates")
             .arg("--download-only")
@@ -120,13 +139,16 @@ impl Manifest {
                 self.module().expect("no module found in manifest")
             ))
             .arg(self.repo_dir.to_str().unwrap())
-            .arg(self.path())
-            .output()?;
+            .arg(self.path());
 
-        if !cmd.status.success() {
+        let cmd_output = cmd.output()?;
+
+        full_println!("build dependencies command: {:#?}", cmd);
+
+        if !cmd_output.status.success() {
             eprintln!(
                 "failed to build dependencies {}",
-                from_utf8(cmd.stderr.as_ref()).unwrap()
+                from_utf8(cmd_output.stderr.as_ref()).unwrap()
             );
         }
 
@@ -134,13 +156,16 @@ impl Manifest {
     }
 
     pub fn build(&self, rebuild: bool) -> Result<(), Box<dyn Error>> {
+        debug_println!("setup command...");
         let mut commands = self.setup_command(rebuild)?;
+        debug_println!("running build commands");
         for command in &mut commands {
             debug_println!("{:#?}", command);
             if !command.status()?.success() {
                 return box_error!("failed to build");
             }
         }
+        debug_println!("build success");
         Ok(())
     }
 
@@ -208,7 +233,7 @@ impl Manifest {
 
         debug_println!("build-system: {}", build_system.to_string());
 
-        let command = match *build_system {
+        let commands = match *build_system {
             BuildSystem::Autotools => self.get_autotools_commands(rebuild, build_args, config_opts),
             BuildSystem::Cmake | BuildSystem::CmakeNinja => {
                 self.get_cmake_commands(rebuild, build_args, config_opts)
@@ -229,7 +254,9 @@ impl Manifest {
             }
         };
 
-        Ok(command)
+        debug_println!("build commands count: {}", commands.len());
+        full_println!("build commands: {:#?}", commands);
+        Ok(commands)
     }
 
     fn get_autotools_commands(
@@ -401,7 +428,7 @@ impl Manifest {
                 command.arg("build");
                 build_args.iter().for_each(|x| _ = command.arg(x));
                 command.arg(&self.repo_dir);
-                x.split(' ').for_each(|xx| _ = command.arg(x));
+                x.split(' ').for_each(|xx| _ = command.arg(xx));
                 command
             })
             .collect()
