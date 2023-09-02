@@ -175,7 +175,7 @@ impl Manifest {
         build_envs.extend(module_envs);
 
         let build_args = vec![
-            "--shared=network".to_string(),
+            "--share=network".to_string(),
             format!("--filesystem={}", self.root_dir.to_str().unwrap()),
             format!("--filesystem={}", self.repo_dir.to_str().unwrap()),
         ];
