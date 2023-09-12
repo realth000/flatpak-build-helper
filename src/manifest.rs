@@ -291,7 +291,6 @@ impl Manifest {
 
         let mut build_args = vec![
             "--share=network".to_string(),
-            "--nofilesystem=host".to_string(), // Need this?
             format!("--filesystem={}", self.root_dir.to_str().unwrap()),
             format!("--filesystem={}", self.repo_dir.to_str().unwrap()),
         ];
