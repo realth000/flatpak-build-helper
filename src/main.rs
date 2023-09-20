@@ -4,9 +4,15 @@ use std::path::PathBuf;
 
 use clap::ArgAction::Count;
 use clap::{Arg, ArgMatches, Command};
+use lazy_static::lazy_static;
 
-use crate::constants::APP_LOG_VAR;
+use crate::constants::{APP_LOG_VAR, GIT_COMMIT_REVISION, GIT_COMMIT_TIME, GIT_TAG_VERSION};
 use crate::flatpak::parse::find_manifest_and_parse;
+
+lazy_static! {
+    static ref VERSION: String =
+        format!("{GIT_TAG_VERSION}-{GIT_COMMIT_REVISION} {GIT_COMMIT_TIME}");
+}
 
 mod constants;
 mod flatpak;
@@ -19,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut command = Command::new("fbh")
         .about("flatpak-build-helper")
-        .version("0.1.0")
+        .version(VERSION.as_str())
         .subcommand(build_command)
         .subcommand(run_command)
         .arg(Arg::new("root-dir").index(1).global(true))
