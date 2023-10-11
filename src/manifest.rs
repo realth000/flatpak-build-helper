@@ -10,6 +10,7 @@ use libc::getuid;
 use racros::AutoDebug;
 use regex::Regex;
 
+use crate::addon::load_envs_from_os;
 use crate::constants::{
     BUILD_SYSTEM_BUILD_DIR, FONT_DIR_CONTENT_HEADER, SYSTEM_FONTS_DIR, SYSTEM_FONT_CACHE_DIRS,
     SYSTEM_LOCAL_FONT_DIR,
@@ -250,6 +251,7 @@ impl Manifest {
         let mut commands = self.setup_command(rebuild)?;
         debug_println!("running build commands");
         for command in &mut commands {
+            command.args(load_envs_from_os());
             debug_println!("{:#?}", command);
             if !command.status()?.success() {
                 return box_error!("failed to build");

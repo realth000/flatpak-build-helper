@@ -2,6 +2,7 @@ use std::env::set_var;
 use std::error::Error;
 use std::path::PathBuf;
 
+use crate::addon::set_override_env_prefix;
 use clap::ArgAction::Count;
 use clap::{Arg, ArgMatches, Command};
 use lazy_static::lazy_static;
@@ -14,6 +15,7 @@ lazy_static! {
         format!("{GIT_TAG_VERSION}-{GIT_COMMIT_REVISION} {GIT_COMMIT_TIME}");
 }
 
+mod addon;
 mod constants;
 mod flatpak;
 mod manifest;
@@ -28,6 +30,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .version(VERSION.as_str())
         .subcommand(build_command)
         .subcommand(run_command)
+        .arg(
+            Arg::new("override-env-prefix")
+                .long("override-env-prefix")
+                .global(true)
+                .help("load envs those names have given prefix from host and override in building"),
+        )
         .arg(Arg::new("root-dir").index(1).global(true))
         .arg(
             Arg::new("verbose")
@@ -42,6 +50,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
     let command_matches = command.clone().get_matches();
+    if let Some(prefix) = command_matches.get_one::<String>("override-env-prefix") {
+        set_override_env_prefix(prefix);
+    }
 
     match command_matches.get_count("verbose") {
         1 => set_var(APP_LOG_VAR, "1"),
